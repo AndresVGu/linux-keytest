@@ -63,7 +63,7 @@ def _ca_en():
         [
             ("Control_L", "Ctrl", 1.5), ("Super_L", "Super", 1.25), ("Alt_L", "Alt", 1.25),
             ("space", "Space", 6.25),
-            ("Alt_R", "Alt", 1.25), ("Super_R", "Super", 1.25), ("Menu", "Menu", 1.25), ("Control_R", "Ctrl", 1.5),
+            ("Alt_R", "Alt", 1.25), ("Menu", "Menu", 1.25), ("Control_R", "Ctrl", 1.5),
             ("_gap", "", 0.3), ("Left", "Left", 1), ("Down", "Down", 1), ("Right", "Right", 1),
         ],
     ]
@@ -105,7 +105,7 @@ def _ca_fr():
         [
             ("Control_L", "Ctrl", 1.5), ("Super_L", "Super", 1.25), ("Alt_L", "Alt", 1.25),
             ("space", "Espace", 6.25),
-            ("Alt_R", "AltCar", 1.25), ("Super_R", "Super", 1.25), ("Menu", "Menu", 1.25), ("Control_R", "Ctrl", 1.5),
+            ("Alt_R", "AltCar", 1.25), ("Menu", "Menu", 1.25), ("Control_R", "Ctrl", 1.5),
             ("_gap", "", 0.3), ("Left", "Gche", 1), ("Down", "Bas", 1), ("Right", "Drte", 1),
         ],
     ]
@@ -147,7 +147,7 @@ def _es_latam():
         [
             ("Control_L", "Ctrl", 1.5), ("Super_L", "Super", 1.25), ("Alt_L", "Alt", 1.25),
             ("space", "Espacio", 6.25),
-            ("Alt_R", "AltGr", 1.25), ("Super_R", "Super", 1.25), ("Menu", "Menu", 1.25), ("Control_R", "Ctrl", 1.5),
+            ("Alt_R", "AltGr", 1.25), ("Menu", "Menu", 1.25), ("Control_R", "Ctrl", 1.5),
             ("_gap", "", 0.3), ("Left", "Izq", 1), ("Down", "Abj", 1), ("Right", "Der", 1),
         ],
     ]
