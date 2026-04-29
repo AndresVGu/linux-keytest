@@ -103,18 +103,25 @@ class KeyboardTester:
     # ── Layout helpers ──
 
     def _get_active_layout(self):
-        rows = list(self.layouts[self.current_layout])
-        if self.numpad_enabled:
-            rows = rows + NUMPAD
-        return rows
+        return list(self.layouts[self.current_layout])
 
     def _get_active_keysyms(self):
-        return get_all_keysyms(self._get_active_layout())
+        keys = get_all_keysyms(self._get_active_layout())
+        if self.numpad_enabled:
+            keys += get_all_keysyms(NUMPAD)
+        return keys
+
+    @staticmethod
+    def _normalize(keysym):
+        """Normalize uppercase letter to lowercase (same physical key)."""
+        if len(keysym) == 1 and keysym.isupper():
+            return keysym.lower()
+        return keysym
 
     # ── Key events ──
 
     def _on_key_press(self, event):
-        ks = event.keysym
+        ks = self._normalize(event.keysym)
         now = datetime.now()
         self.held_keys.add(ks)
 
@@ -156,7 +163,7 @@ class KeyboardTester:
         self.stuck_jobs[ks] = self.master.after(self.STUCK_MS, lambda k=ks: self._mark_stuck(k))
 
     def _on_key_release(self, event):
-        ks = event.keysym
+        ks = self._normalize(event.keysym)
         self.held_keys.discard(ks)
 
         if ks in self.stuck_jobs:
