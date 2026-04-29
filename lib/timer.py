@@ -1,10 +1,7 @@
-"""Session timer, lock polling, sound feedback, and next-key highlight."""
+"""Session timer, lock polling, and sound feedback."""
 
 import subprocess
 import time
-
-from lib.layouts import get_all_keysyms
-from lib.renderer import set_key_color
 
 
 # ── Session Timer ──
@@ -43,39 +40,6 @@ def beep():
         )
     except Exception:
         pass
-
-
-# ── Next Key Highlight ──
-
-def start_highlight_blink(app):
-    _blink(app)
-
-
-def _blink(app):
-    active_keys = app._get_active_keysyms()
-    next_ks = None
-    for ks in active_keys:
-        if ks not in app.pressed_keys:
-            next_ks = ks
-            break
-
-    # Restore previous
-    prev = app.highlight_keysym
-    if prev and prev != next_ks:
-        if prev in app.key_widgets and prev not in app.pressed_keys:
-            set_key_color(app, prev, app.theme["key_bg"], app.theme["key_fg"])
-
-    app.highlight_keysym = next_ks
-
-    if next_ks and next_ks in app.key_widgets and next_ks not in app.pressed_keys:
-        app.highlight_visible = not app.highlight_visible
-        t = app.theme
-        if app.highlight_visible:
-            set_key_color(app, next_ks, t["accent"], t["btn_fg"])
-        else:
-            set_key_color(app, next_ks, t["key_bg"], t["key_fg"])
-
-    app.highlight_job = app.master.after(app.BLINK_MS, lambda: _blink(app))
 
 
 # ── Caps Lock / Num Lock Indicator ──

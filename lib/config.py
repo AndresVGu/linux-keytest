@@ -9,7 +9,6 @@ DEFAULTS = {
     "stuck_timeout_ms": 3000,
     "bounce_threshold": 15,
     "flash_duration_ms": 150,
-    "highlight_blink_ms": 600,
     "export_dir": "~/Downloads",
     "history_file": "~/.keytest_history.csv",
 }

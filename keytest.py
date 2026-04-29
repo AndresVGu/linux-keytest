@@ -58,7 +58,6 @@ class KeyboardTester:
         self.BOUNCE_THRESHOLD = self.cfg["bounce_threshold"]
         self.FLASH_MS = self.cfg["flash_duration_ms"]
         self.STUCK_MS = self.cfg["stuck_timeout_ms"]
-        self.BLINK_MS = self.cfg["highlight_blink_ms"]
 
         # Modes
         self.combo_mode = False
@@ -71,11 +70,6 @@ class KeyboardTester:
         self.timer_start = None
         self.timer_running = False
         self.timer_job = None
-
-        # Highlight
-        self.highlight_job = None
-        self.highlight_keysym = None
-        self.highlight_visible = True
 
         # Easter eggs
         self.konami = KonamiTracker()
@@ -98,7 +92,6 @@ class KeyboardTester:
         ui.apply_theme(self)
         renderer.draw_keyboard(self)
         validator.update_progress(self)
-        timer.start_highlight_blink(self)
         timer.start_lock_poll(self)
 
         master.bind("<KeyPress>", self._on_key_press)
