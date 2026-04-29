@@ -1,293 +1,325 @@
 #!/usr/bin/env python3
+"""
+Keyboard Tester — Modern UI for QA keyboard validation.
+Supports Canadian English, Canadian French, and Spanish (Latin America).
+Author: Andres V. a.k.a. @4vs3c
+"""
+
 import tkinter as tk
 from datetime import datetime
-from tkinter import ttk, scrolledtext
-import tkinter.messagebox # Necesario para el botón de Reset
-#import keyboard
+import atexit
+
+from lib.themes import LIGHT, DARK
+from lib.layouts import LAYOUTS, NUMPAD, get_all_keysyms, detect_system_layout
+from lib.grabber import GnomeKeyGrabber
+from lib.combos import COMBOS
+from lib.config import load_config
+from lib import ui, renderer, timer, validator
+from lib.easter_eggs import KonamiTracker, konami_wave, rainbow_wave
+from lib.seasonal import get_active_season, get_season_footer, draw_decorations
+
 
 class KeyboardTester:
-    """Aplicación para testear las pulsaciones de teclas y su latencia con soporte para QWERTY y AZERTY,
-    incluyendo mapeo de mayúsculas/minúsculas y botón de reset."""
+
+    UNIT = 48
+    KEY_PAD = 3
+    KEY_H = 42
+    FONT = ("Segoe UI", 9, "bold")
+    FONT_SM = ("Segoe UI", 7)
+    FONT_TITLE = ("Segoe UI", 18, "bold")
+    FONT_SUB = ("Segoe UI", 9)
+    FONT_MONO = ("Consolas", 10)
 
     def __init__(self, master):
         self.master = master
-        master.title("Keyboard Tester (EENGLISH / FRENCH)")
-        master.geometry("1100x750") # Tamaño ajustado para un mejor diseño
+        master.title("Keyboard Tester")
+        master.minsize(1280, 720)
 
-        # --- Variables de estado ---
+        self.cfg = load_config()
+        self.theme = LIGHT
+        self.is_dark = False
+
+        # Key state
         self.key_press_times = {}
-        self.pressed_keys = set()  # Almacena las teclas que ya fueron presionadas
-        self.default_color = "gray80"
-        self.active_color = "green"
-        self.tested_color = "khaki1"  # Color amarillo suave para teclas ya testeadas
-
-        # --- Definición de Layouts ---
-        self.layouts = {
-            "English (QWERTY)": self._get_qwerty_layout(),
-            "French (AZERTY)": self._get_azerty_layout(),
-        }
-
-        # --- Layout de la Interfaz ---
-        main_frame = ttk.Frame(master, padding="10")
-        main_frame.pack(fill="both", expand=True)
-
-        # 1. Controles, Selector de Distribución y Botón de Reset
-        control_frame = ttk.Frame(main_frame)
-        control_frame.pack(fill="x", pady=10)
-
-        ttk.Label(control_frame, text="Select Distribución:").pack(side="left", padx=5)
-
-        self.layout_selector = ttk.Combobox(
-            control_frame, 
-            values=list(self.layouts.keys()), 
-            state="readonly",
-            width=20
-        )
-        self.layout_selector.current(0) # Seleccionar QWERTY por defecto
-        self.layout_selector.bind("<<ComboboxSelected>>", self.switch_layout)
-        self.layout_selector.pack(side="left", padx=5)
-
-        # Botón de Reset
-        ttk.Button(control_frame, text="🔁 Reset Keys", command=self.reset_tested_keys).pack(side="right")
-
-
-        # 2. Contenedor Principal (Teclado + Lista)
-        content_frame = ttk.Frame(main_frame)
-        content_frame.pack(fill="both", expand=True)
-
-        # 2.1. Zona del Teclado (Izquierda)
-        self.keyboard_frame = ttk.LabelFrame(content_frame, text="Keyboard", padding="10")
-        self.keyboard_frame.pack(side="left", fill="both", expand=True, padx=10)
-
-        # 2.2. Zona de Latencias (Derecha) con Scrollbar
-        latency_group = ttk.LabelFrame(content_frame, text="Key Latency (miliseconds)", padding="10")
-        latency_group.pack(side="right", fill="y", padx=10)
-
-        # Lista para mostrar las latencias
-        list_frame = ttk.Frame(latency_group)
-        list_frame.pack(fill="both", expand=True)
-
-        self.latency_listbox = tk.Listbox(list_frame, width=35, height=25, font=("Courier", 10))
-        self.latency_listbox.pack(side="left", fill="both", expand=True)
-
-        # Scrollbar para la lista de latencias
-        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.latency_listbox.yview)
-        scrollbar.pack(side="right", fill="y")
-        self.latency_listbox.config(yscrollcommand=scrollbar.set)
-
-        # --- Información del Autor ---
-        self.author_label = tk.Label(master, 
-                                     text="By Andres V. a.k.a. @4vs3c", 
-                                     font=("Arial", 8), 
-                                     fg="gray50") # Color de texto gris suave
-        self.author_label.pack(side="bottom", pady=5) # Abajo de todo, con un pequeño padding
-
-        # --- Inicialización y Eventos ---
-        self.key_widgets = {} 
-        self.current_layout_name = self.layout_selector.get()
-        self._draw_keyboard(self.layouts[self.current_layout_name])
-
-        master.bind('<KeyPress>', self.on_key_press)
-        master.bind('<KeyRelease>', self.on_key_release)
-        master.bind('<FocusIn>', lambda e: master.focus_set()) # Asegurar que la ventana tiene el foco
-
-    # ---------------------------------------------------------------------
-    # --- Definiciones de Layouts (Ajustados con la tecla 'Super') ---
-    # ---------------------------------------------------------------------
-
-    def _get_common_special_keys(self):
-        """Define las teclas de función y navegación comunes a ambos layouts."""
-        return [
-
-
-            # Separador para teclado principal
-            [] 
-        ]
-
-    def _get_qwerty_layout(self):
-        """Layout QWERTY estándar (US/UK) con keysyms minúsculos para letras."""
-        layout = self._get_common_special_keys() + [
-              # Fila de Funciones y Escape
-            [("Escape", "Esc", 1.5), ("F1", "F1"), ("F2", "F2"), ("F3", "F3"), ("F4", "F4"), 
-             ("F5", "F5"), ("F6", "F6"), ("F7", "F7"), ("F8", "F8"), 
-             ("F9", "F9"), ("F10", "F10"), ("F11", "F11"), ("F12", "F12"),
-             ("Num_Lock", "NumLk"),("Print", "PrtSc"), ("Scroll_Lock", "ScrLk"), ("Pause", "Pause")],
-            # Fila 1 (Números y Backspace)
-            [("grave", "~ `"), ("1", "1 !"), ("2", "2 @"), ("3", "3 #"), ("4", "4 $"), 
-             ("5", "5 %"), ("6", "6 ^"), ("7", "7 &"), ("8", "8 *"), ("9", "9 ("), 
-             ("0", "0 )"), ("minus", "- _"), ("equal", "= +"), ("BackSpace", "⌫ Bksp", 2.2), ("Home", "Home"),("End", "End")],
-            # Fila 2 (QWERTY)
-            [("Tab", "↹ Tab", 1.7), ("q", "Q"), ("w", "W"), ("e", "E"), ("r", "R"), 
-             ("t", "T"), ("y", "Y"), ("u", "U"), ("i", "I"), ("o", "O"), 
-             ("p", "P"), ("bracketleft", "[ {"), ("bracketright", "] }"), ("backslash", "\\ |", 1.3), ("Prior", "PgUp")],
-            # Fila 3 (ASDF)
-            [("Caps_Lock", "⇪ Caps", 2.0), ("a", "A"), ("s", "S"), ("d", "D"), ("f", "F"), 
-             ("g", "G"), ("h", "H"), ("j", "J"), ("k", "K"), ("l", "L"), 
-             ("semicolon", "; :"), ("apostrophe", "' \""), ("Return", "⏎ Enter", 2.0),  ("Next", "PgDn")],
-            # Fila 4 (Shift)
-            [("Shift_L", "⇧ Shift", 2.5), ("z", "Z"), ("x", "X"), ("c", "C"), 
-             ("v", "V"), ("b", "B"), ("n", "N"), ("m", "M"), ("comma", ", <"), 
-             ("period", ". >"), ("slash", "/ ?"), ("Shift_R", "⇧ Shift", 3.0), ("","",0.25),("Up", "↑"),],
-            # Fila 5 (Control, Super, Alt, Space) - Super es 'Super_L' en Tkinter
-            [("Control_L", "Ctrl", 1.3), ("Super_L", "❖ Super", 1.7), ("Alt_L", "Alt", 1.3), 
-             ("space", "Espacio", 7.0), 
-             ("Alt_R", "Alt", 1.3), ("Menu", "Menu", 1.3),("Insert", "Ins"),("Delete", "Del"), ("Left", "←"), ("Down", "↓"), ("Right", "→")],
-        ]
-        return layout
-
-    def _get_azerty_layout(self):
-        """Layout AZERTY estándar (Francés) con keysyms minúsculos para letras."""
-        layout = self._get_common_special_keys() + [
-            # Fila 1 (Números y Backspace)
-            [("twosuperior", "²"), ("ampersand", "1 &"), ("eacute", "2 é"), ("quotedbl", "3 \""), ("apostrophe", "4 '"), 
-             ("parenleft", "5 ("), ("section", "6 -"), ("egrave", "7 è"), ("underscore", "8 _"), ("ccedilla", "9 ç"), 
-             ("agrave", "0 à"), ("parenright", ")"), ("equal", "= +"), ("BackSpace", "⌫ Bksp", 2.2)],
-            # Fila 2 (AZERTY)
-            [("Tab", "↹ Tab", 1.7), ("a", "A"), ("z", "Z"), ("e", "E"), ("r", "R"), 
-             ("t", "T"), ("y", "Y"), ("u", "U"), ("i", "I"), ("o", "O"), 
-             ("p", "P"), ("dead_circumflex", "^ ¨"), ("dollar", "$ £"), ("asterisk", "* µ", 1.3)],
-            # Fila 3 (QSDF)
-            [("Caps_Lock", "⇪ Caps", 2.0), ("q", "Q"), ("s", "S"), ("d", "D"), ("f", "F"), 
-             ("g", "G"), ("h", "H"), ("j", "J"), ("k", "K"), ("l", "L"), 
-             ("m", "M"), ("ugrave", "ù %"), ("Return", "⏎ Enter", 2.6)],
-            # Fila 4 (Shift)
-            [("Shift_L", "⇧ Shift", 2.5), ("less", "< >"), ("w", "W"), ("x", "X"), ("c", "C"), 
-             ("v", "V"), ("b", "B"), ("n", "N"), ("comma", ","), ("semicolon", ";"), 
-             ("colon", ": /"), ("Shift_R", "⇧ Shift", 3.0)],
-            # Fila 5 (Control, Super, Alt, Space)
-            [("Control_L", "Ctrl", 1.3), ("Super_L", "❖ Super", 1.3), ("Alt_L", "Alt", 1.3), 
-             ("space", "Espacio", 7.0), 
-             ("Alt_R", "Alt", 1.3), ("Super_R", "❖ Super", 1.3), ("Control_R", "Ctrl", 1.3)],
-        ]
-        return layout
-
-    # ---------------------------------------------------------------------
-    # --- Funciones de Interfaz (Modificado el mapeo) ---
-    # ---------------------------------------------------------------------
-
-    def _clear_keyboard_frame(self):
-        """Elimina todos los widgets del marco del teclado."""
-        for widget in self.keyboard_frame.winfo_children():
-            widget.destroy()
+        self.pressed_keys = set()
+        self.stuck_keys = set()
+        self.ghost_keys = set()
         self.key_widgets = {}
+        self.canvas_keys = {}
+        self.flash_jobs = {}
+        self.stuck_jobs = {}
+        self.latencies = []
+        self.held_keys = set()
 
-    def switch_layout(self, event):
-        """Cambia el layout del teclado cuando se selecciona una nueva opción."""
-        new_layout_name = self.layout_selector.get()
-        if new_layout_name != self.current_layout_name:
-            self.current_layout_name = new_layout_name
-            self._clear_keyboard_frame()
-            self._draw_keyboard(self.layouts[new_layout_name])
+        # Defect tracking
+        self.key_press_count = {}
+        self.repeat_events = {}
+        self.bounce_keys = set()
+        self.BOUNCE_THRESHOLD = self.cfg["bounce_threshold"]
+        self.FLASH_MS = self.cfg["flash_duration_ms"]
+        self.STUCK_MS = self.cfg["stuck_timeout_ms"]
+        self.BLINK_MS = self.cfg["highlight_blink_ms"]
 
-            # Restaurar colores de teclas previamente presionadas
-            for keysym in self.pressed_keys:
-                 if keysym in self.key_widgets:
-                    self.key_widgets[keysym].config(bg=self.tested_color)
+        # Modes
+        self.combo_mode = False
+        self.tested_combos = set()
+        self.numpad_enabled = False
+        self.sound_enabled = self.cfg["sound_enabled"]
+        self.validated = False
 
-    def reset_tested_keys(self):
-        """Reinicia el estado de las teclas testeadas (color amarillo) y la lista de latencias."""
-        if not tkinter.messagebox.askyesno("Confirm Reset", "¿Are you sure you want to reset all keys?"):
+        # Timer
+        self.timer_start = None
+        self.timer_running = False
+        self.timer_job = None
+
+        # Highlight
+        self.highlight_job = None
+        self.highlight_keysym = None
+        self.highlight_visible = True
+
+        # Easter eggs
+        self.konami = KonamiTracker()
+        self._celebration_done = False
+
+        # Seasonal
+        self.season = get_active_season()
+
+        # Layout
+        self.layouts = LAYOUTS
+        detected = detect_system_layout()
+        self.current_layout = detected if self.cfg["default_layout"] == "auto" else self.cfg.get("default_layout", detected)
+
+        # System key grab
+        self.grabber = GnomeKeyGrabber()
+        self.grabber.grab()
+
+        # Build and start
+        ui.build_ui(self)
+        ui.apply_theme(self)
+        renderer.draw_keyboard(self)
+        validator.update_progress(self)
+        timer.start_highlight_blink(self)
+        timer.start_lock_poll(self)
+
+        master.bind("<KeyPress>", self._on_key_press)
+        master.bind("<KeyRelease>", self._on_key_release)
+        master.bind("<FocusIn>", lambda e: master.focus_set())
+        master.protocol("WM_DELETE_WINDOW", self._on_close)
+        atexit.register(self.grabber.release)
+
+    # ── Layout helpers ──
+
+    def _get_active_layout(self):
+        rows = list(self.layouts[self.current_layout])
+        if self.numpad_enabled:
+            rows = rows + NUMPAD
+        return rows
+
+    def _get_active_keysyms(self):
+        return get_all_keysyms(self._get_active_layout())
+
+    # ── Key events ──
+
+    def _on_key_press(self, event):
+        ks = event.keysym
+        now = datetime.now()
+        self.held_keys.add(ks)
+
+        # Konami Code check
+        if self.konami.feed(ks):
+            konami_wave(self)
+            self.konami.reset()
+
+        self.key_press_count[ks] = self.key_press_count.get(ks, 0) + 1
+
+        if ks in self.key_press_times:
+            if ks not in self.repeat_events:
+                self.repeat_events[ks] = []
+            self.repeat_events[ks].append(now)
+        else:
+            self.key_press_times[ks] = now
+            self.repeat_events.pop(ks, None)
+
+        if not self.timer_running:
+            timer.start_timer(self)
+
+        if self.sound_enabled:
+            timer.beep()
+
+        if self.combo_mode:
+            self._check_combos()
+
+        if ks not in self.key_widgets:
+            self.ghost_keys.add(ks)
+            self.latency_list.insert(0, f" [GHOST] {ks}")
+            self.latency_list.itemconfig(0, fg=self.theme["ghost"])
+            validator.update_progress(self)
             return
 
-        self.pressed_keys.clear()
-        self.key_press_times.clear()
-        self.latency_listbox.delete(0, tk.END)
+        renderer.set_key_color(self, ks, self.theme["key_active"], self.theme["key_active_fg"])
 
-        # Devolver el color de todas las teclas al estado por defecto
-        for widget in self.key_widgets.values():
-            widget.config(bg=self.default_color)
+        if ks in self.stuck_jobs:
+            self.master.after_cancel(self.stuck_jobs[ks])
+        self.stuck_jobs[ks] = self.master.after(self.STUCK_MS, lambda k=ks: self._mark_stuck(k))
 
-        #tkinter.messagebox.showinfo("Reset Completo", "El estado de las teclas y el historial de latencias han sido reseteados.")
+    def _on_key_release(self, event):
+        ks = event.keysym
+        self.held_keys.discard(ks)
 
-    def _create_key_widget(self, parent, text, keysym, width_ratio=1):
-        """
-        Crea un Label para la tecla y la mapea a sí misma y a su versión mayúscula 
-        (si es una letra) en self.key_widgets.
-        """
-        width = int(5 * width_ratio) 
+        if ks in self.stuck_jobs:
+            self.master.after_cancel(self.stuck_jobs.pop(ks))
 
-        # Determinar el color inicial
-        initial_color = self.tested_color if keysym in self.pressed_keys else self.default_color
+        if ks in self.key_press_times:
+            dt = (datetime.now() - self.key_press_times.pop(ks)).total_seconds() * 1000
+            self.latencies.append(dt)
+            count = self.key_press_count.get(ks, 1)
+            tag = f" x{count}" if count > 1 else ""
+            self.latency_list.insert(0, f" {ks:<14} {dt:7.1f} ms{tag}")
 
-        key_label = tk.Label(parent, 
-                             text=text, 
-                             bg=initial_color, 
-                             relief="raised", 
-                             borderwidth=2,
-                             width=width,
-                             height=2,
-                             font=("Arial", 10, "bold"))
+        if ks in self.repeat_events and len(self.repeat_events[ks]) >= 3:
+            events = self.repeat_events[ks]
+            duration = (events[-1] - events[0]).total_seconds()
+            if duration > 0:
+                rate = len(events) / duration
+                if rate > self.BOUNCE_THRESHOLD and ks not in self.bounce_keys:
+                    self.bounce_keys.add(ks)
+                    self.latency_list.insert(0, f" [BOUNCE] {ks} {rate:.0f}r/s")
+                    self.latency_list.itemconfig(0, fg=self.theme["ghost"])
+        self.repeat_events.pop(ks, None)
 
-        # 1. Almacenar el keysym principal (ej: 'a')
-        self.key_widgets[keysym] = key_label
+        if ks in self.key_widgets:
+            if ks in self.stuck_keys:
+                self.stuck_keys.discard(ks)
+            self.pressed_keys.add(ks)
+            if ks in self.flash_jobs:
+                self.master.after_cancel(self.flash_jobs[ks])
+            self.flash_jobs[ks] = self.master.after(
+                self.FLASH_MS, lambda k=ks: renderer.set_key_tested(self, k),
+            )
+            validator.update_progress(self)
 
-        # 2. Si es una letra, mapear también la versión mayúscula (ej: 'A')
-        # Esto soluciona el problema de que 's' y 'S' se manejen por separado.
-        if len(keysym) == 1 and keysym.isalpha():
-            self.key_widgets[keysym.upper()] = key_label
+            # 100% celebration (once)
+            if not self._celebration_done:
+                all_keys = set(self._get_active_keysyms())
+                if all_keys.issubset(self.pressed_keys):
+                    self._celebration_done = True
+                    self.latency_list.insert(0, " [🎉] 100% — All keys tested!")
+                    self.latency_list.itemconfig(0, fg="#2ecc71")
+                    rainbow_wave(self)
 
-        return key_label
-
-    def _draw_keyboard(self, layout):
-        """Dibuja el layout del teclado en el marco."""
-        for r_index, row in enumerate(layout):
-            row_frame = ttk.Frame(self.keyboard_frame)
-            row_frame.pack(fill="x", pady=2)
-
-            for key_info in row:
-                if not key_info[0]: # Ignorar los espacios vacíos
-                    ttk.Label(row_frame, width=int(5 * key_info[2])).pack(side="left", padx=1)
-                    continue
-
-                keysym = key_info[0]
-                text = key_info[1]
-                width_ratio = key_info[2] if len(key_info) == 3 else 1
-
-                key_widget = self._create_key_widget(row_frame, text, keysym, width_ratio)
-                key_widget.pack(side="left", padx=1)
-
-    # ---------------------------------------------------------------------
-    # --- Manejo de Eventos de Teclado (Usa el mapeo mayús/minús) ---
-    # ---------------------------------------------------------------------
-
-    def on_key_press(self, event):
-        """Maneja el evento de pulsación: pinta la tecla y registra el tiempo."""
-        keysym = event.keysym
-
-        # Registrar tiempo de pulsación
-        self.key_press_times[keysym] = datetime.now()
-
-        # Pintar la tecla activa (funcionará para 's' o 'S')
-        if keysym in self.key_widgets:
-            self.key_widgets[keysym].config(bg=self.active_color)
-
-        # Nota: Como este es el script base de Tkinter, las teclas como Print Screen 
-        # y Super seguirán activando la funcionalidad del sistema operativo, 
-        # ya que Tkinter no puede bloquearlas. Solo el script con pynput puede hacer eso.
-
-    def on_key_release(self, event):
-        """Maneja el evento de liberación: calcula latencia y actualiza el estado."""
-        keysym = event.keysym
-
-        # 1. Calcular Latencia
-        latency_ms = None
+    def _mark_stuck(self, keysym):
         if keysym in self.key_press_times:
-            press_time = self.key_press_times.pop(keysym)
-            release_time = datetime.now()
+            self.stuck_keys.add(keysym)
+            renderer.set_key_color(self, keysym, self.theme["key_stuck"], self.theme["key_stuck_fg"])
 
-            latency_ms = (release_time - press_time).total_seconds() * 1000
+    # ── Actions (called by UI buttons) ──
 
-            # Añadir a la lista de latencias
-            latency_text = f"[{keysym:^15}]: {latency_ms:7.2f} ms"
-            self.latency_listbox.insert(0, latency_text) 
+    def _on_layout_change(self, event):
+        new = self.layout_var.get()
+        if new != self.current_layout:
+            self.current_layout = new
+            renderer.draw_keyboard(self)
+            validator.update_progress(self)
 
-        # 2. Marcar como testeada (Amarillo suave) y restaurar color
-        if keysym in self.key_widgets:
-            self.pressed_keys.add(keysym) # Añadir a las teclas ya presionadas
-            self.key_widgets[keysym].config(bg=self.tested_color)
+    def _reset(self):
+        validator.reset(self)
+        self.konami.reset()
+        self._celebration_done = False
+        renderer.draw_keyboard(self)
+        validator.update_progress(self)
+        validator.update_validate_btn(self)
+        if self.combo_mode:
+            self._draw_combo_list()
 
-# --- Ejecución del Programa ---
-if __name__ == '__main__':
+    def _export(self):
+        validator.do_export(self)
+
+    def _validate(self):
+        validator.validate(self)
+
+    def _toggle_theme(self):
+        self.is_dark = not self.is_dark
+        self.theme = DARK if self.is_dark else LIGHT
+        ui.apply_theme(self)
+        renderer.draw_keyboard(self)
+        validator.update_progress(self)
+
+    def _toggle_sound(self):
+        self.sound_enabled = not self.sound_enabled
+        self._update_sound_btn()
+
+    def _update_sound_btn(self):
+        t = self.theme
+        if self.sound_enabled:
+            self.sound_btn.config(text="  Sound: ON  ", bg=t["accent"], fg=t["btn_fg"])
+        else:
+            self.sound_btn.config(text="  Sound: OFF  ", bg=t["key_border"], fg=t["text_dim"])
+
+    def _toggle_numpad(self):
+        self.numpad_enabled = not self.numpad_enabled
+        self._update_numpad_btn()
+        renderer.draw_keyboard(self)
+        validator.update_progress(self)
+
+    def _update_numpad_btn(self):
+        t = self.theme
+        if self.numpad_enabled:
+            self.numpad_btn.config(text="  Numpad: ON  ", bg=t["accent"], fg=t["btn_fg"])
+        else:
+            self.numpad_btn.config(text="  Numpad: OFF  ", bg=t["key_border"], fg=t["text_dim"])
+
+    def _update_validate_btn(self):
+        validator.update_validate_btn(self)
+
+    def _on_close(self):
+        self.grabber.release()
+        self.master.destroy()
+
+    # ── Combo Test ──
+
+    def _toggle_combo_mode(self):
+        self.combo_mode = not self.combo_mode
+        if self.combo_mode:
+            self.combo_btn.config(text="  Keys Mode  ")
+            self.combo_frame.pack(padx=8, pady=(0, 8), fill="x")
+            self._draw_combo_list()
+        else:
+            self.combo_btn.config(text="  Combo Test  ")
+            self.combo_frame.pack_forget()
+
+    def _draw_combo_list(self):
+        for w in self.combo_items:
+            w.destroy()
+        self.combo_items.clear()
+
+        import tkinter as _tk
+        t = self.theme
+        for mod, key, label in COMBOS:
+            passed = (mod, key) in self.tested_combos
+            fg = t["combo_pass"] if passed else t["combo_pending_fg"]
+            prefix = "[+]" if passed else "[ ]"
+            lbl = _tk.Label(
+                self.combo_frame, text=f"{prefix} {label}",
+                font=self.FONT_SM, fg=fg, bg=t["bg_secondary"], anchor="w",
+            )
+            lbl.pack(fill="x", padx=4, pady=1)
+            self.combo_items.append(lbl)
+
+    def _check_combos(self):
+        changed = False
+        for mod, key, label in COMBOS:
+            if (mod, key) in self.tested_combos:
+                continue
+            if mod in self.held_keys and key in self.held_keys:
+                self.tested_combos.add((mod, key))
+                self.latency_list.insert(0, f" [COMBO] {label}")
+                self.latency_list.itemconfig(0, fg=self.theme["combo_pass"])
+                changed = True
+        if changed:
+            self._draw_combo_list()
+
+
+if __name__ == "__main__":
     root = tk.Tk()
-    app = KeyboardTester(root)
+    KeyboardTester(root)
     root.mainloop()
