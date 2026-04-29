@@ -6,7 +6,7 @@ Author: Andres V. a.k.a. @4vs3c
 """
 
 import tkinter as tk
-from datetime import datetime
+import time
 import atexit
 
 from lib.themes import LIGHT, DARK
@@ -122,13 +122,8 @@ class KeyboardTester:
 
     def _on_key_press(self, event):
         ks = self._normalize(event.keysym)
-        now = datetime.now()
+        now = time.monotonic_ns()
         self.held_keys.add(ks)
-
-        # Konami Code check
-        if self.konami.feed(ks):
-            konami_wave(self)
-            self.konami.reset()
 
         self.key_press_count[ks] = self.key_press_count.get(ks, 0) + 1
 
@@ -140,6 +135,20 @@ class KeyboardTester:
             self.key_press_times[ks] = now
             self.repeat_events.pop(ks, None)
 
+        # Visual feedback first (lowest latency)
+        if ks in self.key_widgets:
+            renderer.set_key_color(self, ks, self.theme["key_active"], self.theme["key_active_fg"])
+            if ks in self.stuck_jobs:
+                self.master.after_cancel(self.stuck_jobs[ks])
+            self.stuck_jobs[ks] = self.master.after(self.STUCK_MS, lambda k=ks: self._mark_stuck(k))
+        else:
+            self.ghost_keys.add(ks)
+            self.latency_list.insert(0, f" [GHOST] {ks}")
+            self.latency_list.itemconfig(0, fg=self.theme["ghost"])
+            validator.update_progress(self)
+            return
+
+        # Deferred work (non-visual)
         if not self.timer_running:
             timer.start_timer(self)
 
@@ -149,28 +158,21 @@ class KeyboardTester:
         if self.combo_mode:
             self._check_combos()
 
-        if ks not in self.key_widgets:
-            self.ghost_keys.add(ks)
-            self.latency_list.insert(0, f" [GHOST] {ks}")
-            self.latency_list.itemconfig(0, fg=self.theme["ghost"])
-            validator.update_progress(self)
-            return
-
-        renderer.set_key_color(self, ks, self.theme["key_active"], self.theme["key_active_fg"])
-
-        if ks in self.stuck_jobs:
-            self.master.after_cancel(self.stuck_jobs[ks])
-        self.stuck_jobs[ks] = self.master.after(self.STUCK_MS, lambda k=ks: self._mark_stuck(k))
+        # Konami (rare, cheap check)
+        if self.konami.feed(ks):
+            konami_wave(self)
+            self.konami.reset()
 
     def _on_key_release(self, event):
         ks = self._normalize(event.keysym)
+        now_ns = time.monotonic_ns()
         self.held_keys.discard(ks)
 
         if ks in self.stuck_jobs:
             self.master.after_cancel(self.stuck_jobs.pop(ks))
 
         if ks in self.key_press_times:
-            dt = (datetime.now() - self.key_press_times.pop(ks)).total_seconds() * 1000
+            dt = (now_ns - self.key_press_times.pop(ks)) / 1_000_000  # ns to ms
             self.latencies.append(dt)
             count = self.key_press_count.get(ks, 1)
             tag = f" x{count}" if count > 1 else ""
@@ -178,7 +180,7 @@ class KeyboardTester:
 
         if ks in self.repeat_events and len(self.repeat_events[ks]) >= 3:
             events = self.repeat_events[ks]
-            duration = (events[-1] - events[0]).total_seconds()
+            duration = (events[-1] - events[0]) / 1_000_000_000  # ns to sec
             if duration > 0:
                 rate = len(events) / duration
                 if rate > self.BOUNCE_THRESHOLD and ks not in self.bounce_keys:
@@ -260,6 +262,11 @@ class KeyboardTester:
         self._update_numpad_btn()
         renderer.draw_keyboard(self)
         validator.update_progress(self)
+        # Resize window to fit numpad
+        if self.numpad_enabled:
+            self.master.minsize(1520, 720)
+        else:
+            self.master.minsize(1280, 720)
 
     def _update_numpad_btn(self):
         t = self.theme
